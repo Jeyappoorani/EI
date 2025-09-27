@@ -1,0 +1,194 @@
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.*;
+
+// ======================= Logger (Singleton) =======================
+class Logger {
+    private static volatile Logger instance;
+    private Logger() {}
+    public static Logger getInstance() {
+        if (instance == null) {
+            synchronized (Logger.class) {
+                if (instance == null) instance = new Logger();
+            }
+        }
+        return instance;
+    }
+    public void info(String msg) {
+        System.out.println(LocalDateTime.now() + " [INFO] " + msg);
+    }
+    public void error(String msg) {
+        System.err.println(LocalDateTime.now() + " [ERROR] " + msg);
+    }
+}
+
+// ======================= Task Model =======================
+class Task {
+    private final String description;
+    private final LocalTime start, end;
+    private final String priority;
+    private boolean completed;
+
+    public Task(String desc, LocalTime start, LocalTime end, String priority) {
+        if (!start.isBefore(end)) throw new IllegalArgumentException("Invalid time range");
+        this.description = desc; this.start = start; this.end = end; this.priority = priority;
+        this.completed = false;
+    }
+
+    public String getDescription() { return description; }
+    public LocalTime getStart() { return start; }
+    public LocalTime getEnd() { return end; }
+    public String getPriority() { return priority; }
+    public boolean isCompleted() { return completed; }
+    public void markCompleted() { this.completed = true; }
+
+    @Override
+    public String toString() {
+        return start + "-" + end + ": " + description + " [" + priority + "]" +
+                (completed ? " ✔" : "");
+    }
+}
+
+// ======================= Task Factory =======================
+class TaskFactory {
+    public static Task createTask(String desc, String start, String end, String priority) {
+        try {
+            LocalTime s = LocalTime.parse(start);
+            LocalTime e = LocalTime.parse(end);
+            return new Task(desc, s, e, priority);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("Invalid time format (HH:MM expected).");
+        }
+    }
+}
+
+// ======================= Observer Interfaces =======================
+interface Observer {
+    void update(String event, Task task);
+}
+
+class ConsoleNotifier implements Observer {
+    @Override
+    public void update(String event, Task task) {
+        System.out.println("[NOTIFY] " + event + " => " + (task != null ? task : ""));
+    }
+}
+
+// ======================= Schedule Manager (Singleton + Observer) =======================
+class ScheduleManager {
+    private static volatile ScheduleManager instance;
+    private final List<Task> tasks = new ArrayList<>();
+    private final List<Observer> observers = new ArrayList<>();
+
+    private ScheduleManager() {}
+
+    public static ScheduleManager getInstance() {
+        if (instance == null) {
+            synchronized (ScheduleManager.class) {
+                if (instance == null) instance = new ScheduleManager();
+            }
+        }
+        return instance;
+    }
+
+    public void registerObserver(Observer o){ observers.add(o); }
+    private void notifyAll(String event, Task task){
+        for(Observer o:observers) o.update(event,task);
+    }
+
+    public void addTask(Task t){
+        for(Task e:tasks){
+            if(!(t.getEnd().isBefore(e.getStart()) || t.getStart().isAfter(e.getEnd()))){
+                notifyAll("CONFLICT with "+e.getDescription(),t);
+                Logger.getInstance().error("Task conflict detected");
+                return;
+            }
+        }
+        tasks.add(t);
+        tasks.sort(Comparator.comparing(Task::getStart));
+        notifyAll("ADDED",t);
+        Logger.getInstance().info("Task added: "+t.getDescription());
+    }
+
+    public void removeTask(String desc){
+        Iterator<Task> it=tasks.iterator();
+        while(it.hasNext()){
+            Task t=it.next();
+            if(t.getDescription().equalsIgnoreCase(desc)){
+                it.remove();
+                notifyAll("REMOVED",t);
+                return;
+            }
+        }
+        Logger.getInstance().error("Task not found: "+desc);
+    }
+
+    public void markComplete(String desc){
+        for(Task t:tasks){
+            if(t.getDescription().equalsIgnoreCase(desc)){
+                t.markCompleted();
+                notifyAll("COMPLETED",t);
+                return;
+            }
+        }
+        Logger.getInstance().error("Task not found: "+desc);
+    }
+
+    public void viewTasks(){
+        if(tasks.isEmpty()){ System.out.println("No tasks scheduled."); return; }
+        for(Task t:tasks) System.out.println(t);
+    }
+
+    public void viewByPriority(String p){
+        tasks.stream().filter(t->t.getPriority().equalsIgnoreCase(p))
+             .forEach(System.out::println);
+    }
+}
+
+// ======================= Main Application =======================
+public class AstronautApp {
+    public static void main(String[] args) {
+        ScheduleManager mgr=ScheduleManager.getInstance();
+        mgr.registerObserver(new ConsoleNotifier());
+        Scanner sc=new Scanner(System.in);
+
+        while(true){
+            System.out.println("\n=== Astronaut Daily Schedule ===");
+            System.out.println("1. Add Task");
+            System.out.println("2. Remove Task");
+            System.out.println("3. View Tasks");
+            System.out.println("4. Mark Task Completed");
+            System.out.println("5. View by Priority");
+            System.out.println("0. Exit");
+            System.out.print("Choose: ");
+            int ch;
+            try { ch=sc.nextInt(); sc.nextLine(); } catch(Exception e){ break; }
+
+            try {
+                switch(ch){
+                    case 1:
+                        System.out.print("Desc: "); String d=sc.nextLine();
+                        System.out.print("Start (HH:MM): "); String s=sc.nextLine();
+                        System.out.print("End (HH:MM): "); String e=sc.nextLine();
+                        System.out.print("Priority: "); String p=sc.nextLine();
+                        Task t= TaskFactory.createTask(d,s,e,p);
+                        mgr.addTask(t);
+                        break;
+                    case 2:
+                        System.out.print("Desc: "); mgr.removeTask(sc.nextLine()); break;
+                    case 3:
+                        mgr.viewTasks(); break;
+                    case 4:
+                        System.out.print("Desc: "); mgr.markComplete(sc.nextLine()); break;
+                    case 5:
+                        System.out.print("Priority: "); mgr.viewByPriority(sc.nextLine()); break;
+                    case 0: 
+                        System.out.println("Goodbye!");
+                        return;
+                    default: System.out.println("Invalid option");
+                }
+            }catch(Exception ex){ System.err.println("Error: "+ex.getMessage()); }
+        }
+        sc.close();
+    }
+}
