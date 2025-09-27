@@ -1,0 +1,284 @@
+// ======================= common/Logger.java =======================
+package designpatterns.common;
+import java.time.LocalDateTime;
+
+public class Logger {
+    private static volatile Logger instance;
+    private Logger() {}
+    public static Logger getInstance() {
+        if (instance == null) {
+            synchronized (Logger.class) {
+                if (instance == null) instance = new Logger();
+            }
+        }
+        return instance;
+    }
+    public void info(String msg) {
+        System.out.println(LocalDateTime.now() + " [INFO] " + msg);
+    }
+    public void error(String msg) {
+        System.err.println(LocalDateTime.now() + " [ERROR] " + msg);
+    }
+}
+
+// ======================= behavioral/observer =======================
+package designpatterns.behavioral.observer;
+import java.time.LocalTime;
+import java.util.*;
+import designpatterns.common.Logger;
+
+public interface Observer {
+    void update(String event, Task task);
+}
+
+public interface Subject {
+    void register(Observer o);
+    void unregister(Observer o);
+    void notifyObservers(String event, Task task);
+}
+
+public class Task {
+    private final String description;
+    private final LocalTime start, end;
+    private final String priority;
+    public Task(String d, LocalTime s, LocalTime e, String p) {
+        if (!s.isBefore(e)) throw new IllegalArgumentException("Invalid time");
+        this.description = d; this.start = s; this.end = e; this.priority = p;
+    }
+    public String getDescription() { return description; }
+    public LocalTime getStart() { return start; }
+    public LocalTime getEnd() { return end; }
+    @Override public String toString() {
+        return start + " - " + end + ": " + description + " [" + priority + "]";
+    }
+}
+
+public class ScheduleManager implements Subject {
+    private final List<Task> tasks = new ArrayList<>();
+    private final List<Observer> observers = new ArrayList<>();
+
+    public void register(Observer o) { observers.add(o); }
+    public void unregister(Observer o) { observers.remove(o); }
+    public void notifyObservers(String event, Task t) {
+        for (Observer o : observers) o.update(event, t);
+    }
+
+    public void addTask(Task t) {
+        for (Task e : tasks) {
+            if (!(t.getEnd().isBefore(e.getStart()) || t.getStart().isAfter(e.getEnd()))) {
+                notifyObservers("CONFLICT", t);
+                Logger.getInstance().error("Conflict with " + e.getDescription());
+                return;
+            }
+        }
+        tasks.add(t);
+        tasks.sort(Comparator.comparing(Task::getStart));
+        notifyObservers("ADDED", t);
+    }
+
+    public void removeTask(String desc) {
+        tasks.removeIf(t -> {
+            if (t.getDescription().equals(desc)) {
+                notifyObservers("REMOVED", t);
+                return true;
+            }
+            return false;
+        });
+    }
+
+    public List<Task> viewTasks() { return tasks; }
+}
+
+public class ConsoleNotifier implements Observer {
+    public void update(String event, Task task) {
+        System.out.println("[ConsoleNotifier] " + event + " => " + task);
+    }
+}
+
+public class ObserverDemo {
+    public static void run() {
+        ScheduleManager m = new ScheduleManager();
+        m.register(new ConsoleNotifier());
+        m.addTask(new Task("Exercise", LocalTime.of(7,0), LocalTime.of(8,0), "High"));
+        m.addTask(new Task("Meeting", LocalTime.of(9,0), LocalTime.of(10,0), "Medium"));
+        m.addTask(new Task("Conflict", LocalTime.of(9,30), LocalTime.of(10,30), "High"));
+        System.out.println("Tasks:");
+        m.viewTasks().forEach(System.out::println);
+    }
+}
+
+// ======================= behavioral/strategy =======================
+package designpatterns.behavioral.strategy;
+
+public interface PaymentStrategy { void pay(double amt) throws Exception; }
+
+public class CreditCardStrategy implements PaymentStrategy {
+    private final String number; private final String name;
+    public CreditCardStrategy(String n, String nm) { number=n; name=nm; }
+    public void pay(double amt) throws Exception {
+        if (number.length()<12) throw new Exception("Invalid card");
+        System.out.println("Paid " + amt + " with CreditCard for " + name);
+    }
+}
+
+public class PayPalStrategy implements PaymentStrategy {
+    private final String email;
+    public PayPalStrategy(String e) { email=e; }
+    public void pay(double amt) throws Exception {
+        if (!email.contains("@")) throw new Exception("Invalid email");
+        System.out.println("Paid " + amt + " with PayPal for " + email);
+    }
+}
+
+public class PaymentContext {
+    private PaymentStrategy strategy;
+    public void setStrategy(PaymentStrategy s){ strategy=s; }
+    public void checkout(double amt){
+        try{ strategy.pay(amt);}catch(Exception e){System.err.println(e.getMessage());}
+    }
+}
+
+public class StrategyDemo {
+    public static void run() {
+        PaymentContext ctx=new PaymentContext();
+        ctx.setStrategy(new CreditCardStrategy("123456789012","Alice"));
+        ctx.checkout(100);
+        ctx.setStrategy(new PayPalStrategy("bob@example.com"));
+        ctx.checkout(50);
+    }
+}
+
+// ======================= creational/singleton =======================
+package designpatterns.creational.singleton;
+import designpatterns.common.Logger;
+
+public class SingletonDemo {
+    public static void run() {
+        Logger.getInstance().info("Singleton Logger works!");
+    }
+}
+
+// ======================= creational/factory =======================
+package designpatterns.creational.factory;
+
+public interface ITask { void execute(); }
+
+public class SimpleTask implements ITask {
+    private final String desc;
+    public SimpleTask(String d){desc=d;}
+    public void execute(){System.out.println("Executing "+desc);}
+}
+
+public class RecurringTask implements ITask {
+    private final String desc; private final int min;
+    public RecurringTask(String d,int m){desc=d;min=m;}
+    public void execute(){System.out.println("Recurring "+desc+" every "+min+"min");}
+}
+
+public class TaskFactory {
+    public static ITask create(String type,String desc,int...min){
+        switch(type.toLowerCase()){
+            case "simple": return new SimpleTask(desc);
+            case "recurring": return new RecurringTask(desc,min[0]);
+            default: throw new IllegalArgumentException("Unknown type");
+        }
+    }
+}
+
+public class FactoryDemo {
+    public static void run(){
+        ITask t1=TaskFactory.create("simple","Backup DB");
+        ITask t2=TaskFactory.create("recurring","Sync Sensors",15);
+        t1.execute(); t2.execute();
+    }
+}
+
+// ======================= structural/adapter =======================
+package designpatterns.structural.adapter;
+
+public interface Sensor { double readValue(); String getUnit(); }
+
+public class LegacySensor {
+    public int getTemperatureTenths(){ return 253; }
+}
+
+public class LegacySensorAdapter implements Sensor {
+    private final LegacySensor legacy;
+    public LegacySensorAdapter(LegacySensor l){ legacy=l; }
+    public double readValue(){ return legacy.getTemperatureTenths()/10.0; }
+    public String getUnit(){ return "Celsius"; }
+}
+
+public class AdapterDemo {
+    public static void run(){
+        Sensor s=new LegacySensorAdapter(new LegacySensor());
+        System.out.println("Temp: "+s.readValue()+" "+s.getUnit());
+    }
+}
+
+// ======================= structural/composite =======================
+package designpatterns.structural.composite;
+import java.util.*;
+
+public interface FSEntry {
+    String getName(); long getSize(); void print(String indent);
+}
+
+public class FileLeaf implements FSEntry {
+    private final String name; private final long size;
+    public FileLeaf(String n,long s){name=n;size=s;}
+    public String getName(){return name;}
+    public long getSize(){return size;}
+    public void print(String indent){System.out.println(indent+"- "+name+" ("+size+" bytes)");}
+}
+
+public class FolderComposite implements FSEntry {
+    private final String name; private final List<FSEntry> children=new ArrayList<>();
+    public FolderComposite(String n){name=n;}
+    public void add(FSEntry e){children.add(e);}
+    public long getSize(){return children.stream().mapToLong(FSEntry::getSize).sum();}
+    public String getName(){return name;}
+    public void print(String indent){
+        System.out.println(indent+"+ "+name+" ("+getSize()+" bytes)");
+        for(FSEntry e:children) e.print(indent+"  ");
+    }
+}
+
+public class CompositeDemo {
+    public static void run(){
+        FolderComposite root=new FolderComposite("root");
+        root.add(new FileLeaf("readme.txt",1024));
+        FolderComposite src=new FolderComposite("src");
+        src.add(new FileLeaf("Main.java",2048));
+        root.add(src);
+        root.print("");
+    }
+}
+
+// ======================= MainDemo.java =======================
+package designpatterns;
+import java.util.Scanner;
+import designpatterns.behavioral.observer.ObserverDemo;
+import designpatterns.behavioral.strategy.StrategyDemo;
+import designpatterns.creational.singleton.SingletonDemo;
+import designpatterns.creational.factory.FactoryDemo;
+import designpatterns.structural.adapter.AdapterDemo;
+import designpatterns.structural.composite.CompositeDemo;
+
+public class MainDemo {
+    public static void main(String[] args) {
+        Scanner sc=new Scanner(System.in);
+        System.out.println("Choose pattern demo: 1-Observer 2-Strategy 3-Singleton 4-Factory 5-Adapter 6-Composite");
+        int ch=sc.nextInt();
+        switch(ch){
+            case 1: ObserverDemo.run(); break;
+            case 2: StrategyDemo.run(); break;
+            case 3: SingletonDemo.run(); break;
+            case 4: FactoryDemo.run(); break;
+            case 5: AdapterDemo.run(); break;
+            case 6: CompositeDemo.run(); break;
+            default: System.out.println("Invalid choice");
+        }
+        sc.close();
+    }
+}
