@@ -1,0 +1,48 @@
+// File: creational/singleton/SingletonDemo.java
+package designpatterns.creational.singleton;
+import designpatterns.common.Logger;
+
+public class SingletonDemo {
+    public static void run() {
+        Logger.getInstance().info("Singleton Logger works!");
+    }
+}
+// File: creational/factory/ITask.java
+package designpatterns.creational.factory;
+public interface ITask { void execute(); }
+// File: creational/factory/SimpleTask.java
+package designpatterns.creational.factory;
+public class SimpleTask implements ITask {
+    private final String desc;
+    public SimpleTask(String d){desc=d;}
+    public void execute(){System.out.println("Executing "+desc);}
+}
+// File: creational/factory/RecurringTask.java
+package designpatterns.creational.factory;
+public class RecurringTask implements ITask {
+    private final String desc; private final int min;
+    public RecurringTask(String d,int m){desc=d;min=m;}
+    public void execute(){System.out.println("Recurring "+desc+" every "+min+"min");}
+}
+// File: creational/factory/TaskFactory.java
+package designpatterns.creational.factory;
+public class TaskFactory {
+    public static ITask create(String type,String desc,int...min){
+        switch(type.toLowerCase()){
+            case "simple": return new SimpleTask(desc);
+            case "recurring": return new RecurringTask(desc,min[0]);
+            default: throw new IllegalArgumentException("Unknown type");
+        }
+    }
+}
+// File: creational/factory/FactoryDemo.java
+package designpatterns.creational.factory;
+public class FactoryDemo {
+    public static void run(){
+        ITask t1=TaskFactory.create("simple","Backup DB");
+        ITask t2=TaskFactory.create("recurring","Sync Sensors",15);
+        t1.execute(); t2.execute();
+    }
+}
+
+
