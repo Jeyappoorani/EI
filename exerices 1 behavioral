@@ -1,0 +1,46 @@
+// File: behavioral/strategy/PaymentStrategy.java
+package designpatterns.behavioral.strategy;
+public interface PaymentStrategy { void pay(double amt) throws Exception; }
+// File: behavioral/strategy/CreditCardStrategy.java
+package designpatterns.behavioral.strategy;
+public class CreditCardStrategy implements PaymentStrategy {
+    private final String number; private final String name;
+    public CreditCardStrategy(String n, String nm) { number=n; name=nm; }
+    public void pay(double amt) throws Exception {
+        if (number.length()<12) throw new Exception("Invalid card");
+        System.out.println("Paid " + amt + " with CreditCard for " + name);
+    }
+}
+// File: behavioral/strategy/PayPalStrategy.java
+package designpatterns.behavioral.strategy;
+public class PayPalStrategy implements PaymentStrategy {
+    private final String email;
+    public PayPalStrategy(String e) { email=e; }
+    public void pay(double amt) throws Exception {
+        if (!email.contains("@")) throw new Exception("Invalid email");
+        System.out.println("Paid " + amt + " with PayPal for " + email);
+    }
+}
+// File: behavioral/strategy/PaymentContext.java
+package designpatterns.behavioral.strategy;
+public class PaymentContext {
+    private PaymentStrategy strategy;
+    public void setStrategy(PaymentStrategy s){ strategy=s; }
+    public void checkout(double amt){
+        try{ strategy.pay(amt);}catch(Exception e){System.err.println(e.getMessage());}
+    }
+}
+// File: behavioral/strategy/StrategyDemo.java
+package designpatterns.behavioral.strategy;
+public class StrategyDemo {
+    public static void run() {
+        PaymentContext ctx=new PaymentContext();
+        ctx.setStrategy(new CreditCardStrategy("123456789012","Alice"));
+        ctx.checkout(100);
+        ctx.setStrategy(new PayPalStrategy("bob@example.com"));
+        ctx.checkout(50);
+    }
+}
+
+
+
